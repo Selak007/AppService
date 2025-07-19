@@ -28,7 +28,7 @@ jobs:
       # Optional: If you have a React frontend
       - name: Build React frontend (optional)
         run: |
-          cd frontend
+          cd src
           npm install
           npm run build
           cd ..
