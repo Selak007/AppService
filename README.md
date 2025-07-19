@@ -1,4 +1,3 @@
-````markdown
 # 🚀 AppService
 
 This project contains the full setup for deploying a web service (e.g., Flask or FastAPI) using Git and GitHub, along with steps to run the app and solve common version control issues.
