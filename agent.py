@@ -1,37 +1,70 @@
-import os
-from openai import AzureOpenAI
-from flask import Flask, request, jsonify
+name: Build and deploy Flask app to Azure Web App - flaskapp19
 
-endpoint = "https://aihub0012034742062.openai.azure.com/"
-model_name = "gpt-35-turbo"
-deployment = "gpt-35-turbo"
-subscription_key = "EY3z5eTUiFnr2s63t2aohykHWhhavdObJFKI9svE0EONuGAsJz9XJQQJ99BFACHYHv6XJ3w3AAAAACOGXAew"
-api_version = "2024-12-01-preview"
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
-from flask_cors import CORS
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
-app = Flask(__name__)
-CORS(app)
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-client = AzureOpenAI(
-    api_key=subscription_key,
-    api_version=api_version,
-    azure_endpoint=endpoint
-)
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-@app.route('/ask', methods=['POST'])
-def ask_agent():
-    data = request.json
-    user_input = data.get('question', '')
-    prompt = f"Answer the following in a simple paragraph of about 30 words:\n{user_input}"
-    response = client.chat.completions.create(
-        model=deployment,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=100
-    )
-    answer = response.choices[0].message.content.strip()
-    return jsonify({'answer': answer})
+      - name: Prepare deployment package
+        run: |
+          mkdir deploy
+          cp agent.py requirements.txt deploy/
+          cd deploy
+          zip -r ../release.zip .
 
-if __name__ == '__main__':
-    app.run(port=5000)
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-app
+          path: release.zip
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: python-app
+
+      - name: Unzip artifact
+        run: unzip release.zip
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_0974A7B408404E03BA3399A7A07D607B }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_472C4F0991AD4A41A58ADA4E3EEA4DEA }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_893518D29F3A4E0DBBB55670DE5DD24E }}
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'flaskapp19'
+          slot-name: 'Production'
+          package: release.zip
